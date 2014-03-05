@@ -109,10 +109,11 @@ function _spotify_request($url) {
  *   XML response on success or FALSE on failure.
  */
 function _spotify_search($what, $q, $page = 1) {
+ 
   if (strlen($q) < 3) {
     return FALSE;
   }
-  $url = SPOTIFY_SEARCH_WS . $what . '?q=' . $q . '&page=' . $page;
+  $url = SPOTIFY_SEARCH_WS . $what . '.json?q=' . $q . '&page=' . $page;
 
   $results = _spotify_request($url);
 

@@ -281,7 +281,7 @@ function spotifyfieldValidate($element, &$form_state) {
     $matches = array();
     preg_match('/(([^[]+)\[([^]]+))/i', $value, $matches);
     if (sizeof($matches) != 4) {
-      form_set_error($error_element, t('%name: the value is not in a correct format, do not manually edit the returned value.', array('%name' => $element['#title'])));
+      //  form_set_error($error_element, t('%name: the value is not in a correct format, do not manually edit the returned value.', array('%name' => $element['#title'])));
     } else {
       form_set_value($element, array('spotifyfield' => $value), $form_state);
     }
@@ -293,33 +293,33 @@ function spotifyfieldValidate($element, &$form_state) {
  */
 function spotifyfield_autocomplete($type, $query) {
   $matches = array();
-
-// Load API include file.
+  // Load API include file.
   module_load_include('inc', 'spotify', 'spotify.api');
 
   $function = "spotify_search_{$type}";
+
   if (function_exists($function)) {
-// Search.
     if ($results = $function(urlencode($query))) {
-// Load XML.
-      if ($xml = simplexml_load_string($results->data)) {
-// Assemble matches.
-        foreach ($xml->$type as $row) {
-          switch ($type) {
-            case 'album':
-            case 'track':
-              $matches[$row->name . " [{$row['href']}]"] = '<div class="reference-autocomplete">' . check_plain($row->name) . ' - ' . check_plain($row->artist->name) . '</div>';
-              break;
-            default:
-              $matches[$row->name . " [{$row['href']}]"] = '<div class="reference-autocomplete">' . check_plain($row->name) . '</div>';
-              break;
+      $result = drupal_json_decode($results->data);
+      switch ($type) {
+        case 'album':
+          foreach ($result['albums'] as $row) {
+            $matches[$row['name'] . " [{$row['href']}]"] = check_plain($row['name']);
           }
-        }
+          break;
+        case 'track':
+          foreach ($result['tracks'] as $row) {
+            $matches[$row['name'] . " [{$row['href']}]"] = check_plain($row['name']) . ' - ' . check_plain($row['artists'][0]['name']);
+          }
+          break;
+        case 'artist':
+          foreach ($result['artists'] as $row) {
+            $matches[$row['name'] . " [{$row['href']}]"] = check_plain($row['name']);
+          }
+          break;
       }
     }
-
-// Output JSON.
-    drupal_json_output($matches);
+    return drupal_json_output($matches);
   }
 }
 
@@ -427,7 +427,7 @@ function theme_spotify_album($data) {
       . " (" . $data['album']['released'] . ")</h3>\n";
   $image = NULL;
   if (variable_get('spotifyfield_display_cover', 1)) {
-   $image = spotifyfield_get_cover($data['uri']);
+    $image = spotifyfield_get_cover($data['uri']);
   }
   if (!is_null($image)) {
     $output .= '<a href="' . $data['uri'] . '"><img src="' . $image . '" width="300" height="300" class="spotify-album-cover" alt="" /></a>';
@@ -462,8 +462,8 @@ function spotifyfield_get_cover($uri) {
       watchdog('spotify image', $response->error);
       return FALSE;
     } else {
-    $cover_art = drupal_json_decode($response->data);
-    return $cover_art['thumbnail_url'];
+      $cover_art = drupal_json_decode($response->data);
+      return $cover_art['thumbnail_url'];
     }
   }
 }
@@ -489,7 +489,7 @@ function theme_spotify_artist($data) {
  * Theme function for track.
  */
 function theme_spotify_track($data) {
-  
+
   $doc = simplexml_load_string($data['data']);
   $output = "<div class=\"spotify-track-information\">\n";
   $output .= "<h3>{$doc->name}</h3>\n";
@@ -515,7 +515,7 @@ function spotifyfield_settings() {
     '#description' => t('Display album cover when using the extended formatter.'),
     '#default_value' => variable_get('spotifyfield_display_cover', 0),
   );
- 
+
   return system_settings_form($form);
 }
 
@@ -534,7 +534,6 @@ function _spotifyfield_format_value($data) {
 
 /**
  * Returns the album as an array.
- *
  * @param object $data
  * @param string $uri
  * @return function
