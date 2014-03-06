@@ -75,9 +75,9 @@ function _spotify_request($url) {
   $key = md5($url);
   // Check cache for query.
   $response = cache_get($key, 'cache');
-
-  // No cache found, perform request.
+  // No cache found, do request.
   if (!$response) {
+
     // Make request.
     $response = drupal_http_request($url, array(), 'GET', NULL, 3);
 
@@ -106,7 +106,7 @@ function _spotify_request($url) {
  * @param $page
  *   The page of the result set to return; defaults to 1.
  * @return
- *   XML response on success or FALSE on failure.
+ *   json response on success or FALSE on failure.
  */
 function _spotify_search($what, $q, $page = 1) {
  
