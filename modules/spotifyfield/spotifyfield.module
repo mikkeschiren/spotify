@@ -88,6 +88,9 @@ function spotifyfield_field_formatter_info() {
     'spotifyfield_extended' => array(
       'label' => t('Extended'),
       'field types' => array('spotifyfield'),
+      'settings'  => array( //Array of the settings we'll create
+        'style' => 'medium', //give a default value for when the form is first loaded
+      ),
     ),
     'spotifyfield_play_button' => array(
       'label' => t('Spotify play button'),
@@ -107,7 +110,19 @@ function spotifyfield_field_formatter_settings_form($field, $instance, $view_mod
   $settings = $display['settings'];
 
   $element = array();
-
+  if ($display['type'] == 'spotifyfield_extended') {
+    $element['style'] = array(
+      '#title' => t('Imagestyle'),
+      '#type' => 'select',
+      '#options' => array(
+        'thumbnail' => t('Thumbnail (100x100)'),
+        'medium' => t('Medium (220x220)'),
+        'large' => t('Large (480x480)'),
+      ),
+      '#default_value' => $settings['style'],
+      '#required' => TRUE,
+    );
+  }
   if ($display['type'] == 'spotifyfield_play_button') {
     $element['size'] = array(
       '#title' => t('Size'),
@@ -132,6 +147,9 @@ function spotifyfield_field_formatter_settings_summary($field, $instance, $view_
   $settings = $display['settings'];
 
   $summary = '';
+  if ($display['type'] == 'spotifyfield_extended') {
+    $summary = t('Style: @style', array('@style' => $settings['style']));
+  }
   if ($display['type'] == 'spotifyfield_play_button') {
     $summary = t('Size: @size', array('@size' => $settings['size']));
   }
@@ -158,7 +176,9 @@ function spotifyfield_field_formatter_view($entity_type, $entity, $field, $insta
           break;
 
         case 'spotifyfield_extended':
-          $element[$delta]['#markup'] = theme('spotifyfield_formatter_extended', array('element' => $value));
+          $settings = $display['settings']; // get the settings
+          $style = $settings['style'];
+          $element[$delta]['#markup'] = theme('spotifyfield_formatter_extended', array('element' => $value, 'settings' => $settings));
           break;
 
         case 'spotifyfield_play_button':
@@ -346,6 +366,8 @@ function theme_spotifyfield_formatter_plain($variables) {
  */
 function theme_spotifyfield_formatter_extended($variables) {
   $element = $variables['element'];
+
+  $settings = $variables['settings'];
   // Get title and uri and type; artist, album or track.
   $matches = array();
   preg_match('/(([^[]+)\[(spotify:([^:]+):[^]]+))/i', $element['safe'], $matches);
@@ -373,13 +395,13 @@ function theme_spotifyfield_formatter_extended($variables) {
     // Call the correct theme function.
     switch ($type) {
       case 'album':
-        return spotifyfield_get_album($response->data, $uri);
+        return spotifyfield_get_album($response->data, $uri, $settings);
         break;
       case 'artist':
         return spotifyfield_get_artist($response->data);
         break;
       case 'track':
-        return spotifyfield_get_track($response->data);
+        return spotifyfield_get_track($response->data, $settings);
         break;
       default:
         return theme('spotifyfield_formatter_default', $element);
@@ -503,7 +525,7 @@ function theme_spotify_track($data) {
   if (!is_null($image)) {
     $spotifyimage = array(
       'path' => spotifyfield_get_remote_image_from_url($image),
-      'style_name' => 'large',
+      'style_name' => $data['settings']['style'],
       'alt' => $data['track']['album']['name']
     );
     $output .= '<a href="' . $data['track']['href'] . '">' . theme('image_style', $spotifyimage) . '</a>';
@@ -566,11 +588,12 @@ function _spotifyfield_format_value($data) {
  * @param string $uri
  * @return function
  */
-function spotifyfield_get_album($data, $uri) {
+function spotifyfield_get_album($data, $uri, $style) {
   // Result is json, se lets get that into an array.
   $album = drupal_json_decode($data);
   // Add the spotify uri to the array, we need it later
   $album['uri'] = $uri;
+  $album['style'] = $style;
   return theme('spotify_album', $album);
 }
 
@@ -581,10 +604,11 @@ function spotifyfield_get_album($data, $uri) {
  * @param string $uri
  * @return function
  */
-function spotifyfield_get_track($data) {
+function spotifyfield_get_track($data, $settings) {
   // Result is json, se lets get that into an array.
   $track = drupal_json_decode($data);
   // Add the spotify uri to the array, we need it later
+  $track['settings'] = $settings;
   return theme('spotify_track', $track);
 }
 
@@ -614,8 +638,11 @@ function spotifyfield_get_remote_image_from_url($url) {
   $image_name = str_ireplace("/", "-", $cut_url);
   $image_path = $external_image_path . '/' . $image_name . '.jpg';
 
+  // @todo: Save image_path in cache?
+
   // Check if we allready have downloaded the image, return the image path if it
   // exists. Else download it.
+  var_dump($image_path);
   if (!file_destination($image_path, FILE_EXISTS_ERROR)) {
   // The file exists.
     return($image_path);
