@@ -114,11 +114,7 @@ function spotifyfield_field_formatter_settings_form($field, $instance, $view_mod
     $element['style'] = array(
       '#title' => t('Imagestyle'),
       '#type' => 'select',
-      '#options' => array(
-        'thumbnail' => t('Thumbnail (100x100)'),
-        'medium' => t('Medium (220x220)'),
-        'large' => t('Large (480x480)'),
-      ),
+      '#options' => image_style_options(FALSE, PASS_THROUGH),
       '#default_value' => $settings['style'],
       '#required' => TRUE,
     );
@@ -398,7 +394,7 @@ function theme_spotifyfield_formatter_extended($variables) {
         return spotifyfield_get_album($response->data, $uri, $settings);
         break;
       case 'artist':
-        return spotifyfield_get_artist($response->data);
+        return spotifyfield_get_artist($response->data, $settings);
         break;
       case 'track':
         return spotifyfield_get_track($response->data, $settings);
@@ -447,9 +443,15 @@ function theme_spotify_album($data) {
   $image = NULL;
   if (variable_get('spotifyfield_display_cover', 1)) {
     $image = spotifyfield_get_cover($data['uri']);
+
   }
   if (!is_null($image)) {
-    $output .= '<a href="' . $data['uri'] . '"><img src="' . $image . '" width="300" height="300" class="spotify-album-cover" alt="" /></a>';
+    $spotifyimage = array(
+      'path' => spotifyfield_get_remote_image_from_url($image),
+      'style_name' => $data['settings']['style'],
+      'alt' => $data['album']['name']
+    );
+    $output .= '<a href="' . $data['uri'] . '">' . theme('image_style', $spotifyimage) . '</a>';
   }
 
   $output .= "<ol>\n";
@@ -498,14 +500,21 @@ function theme_spotify_artist($data) {
   foreach ($data['artist']['albums'] as $album) {
     $output .= "<li><a href=\"{$album['album']['href']}\">{$album['album']['name']}";
     $output .=!empty($album['album']['released']) ? " ({$album['album']['released']})" : '';
+    $output .= '</a>';
     $image = NULL;
     if (variable_get('spotifyfield_display_cover', 1)) {
       $image = spotifyfield_get_cover($album['album']['href']);
+
     }
     if (!is_null($image)) {
-      $output .= '<br /><a href="' . $album['album']['href'] . '"><img src="' . $image . '" width="300" height="300" class="spotify-album-cover" alt="" /></a>';
-    }
-    $output .= "</a></li>\n";
+      $spotifyimage = array(
+        'path' => spotifyfield_get_remote_image_from_url($image),
+        'style_name' => $data['settings']['style'],
+        'alt' => $album['album']['name']
+      );
+    $output .= '<a href="' . $album['album']['href'] . '">' . theme('image_style', $spotifyimage) . '</a><br />';
+  }
+    $output .= "</li>\n";
   }
   $output .= "</ul>\n</div>\n";
   return $output;
@@ -517,7 +526,7 @@ function theme_spotify_artist($data) {
 function theme_spotify_track($data) {
   $output = "<div class=\"spotify-track-information\">\n";
   $output .= "<h3>{$data['track']['name']}</h3>\n";
-    $image = NULL;
+  $image = NULL;
   if (variable_get('spotifyfield_display_cover', 1)) {
     $image = spotifyfield_get_cover($data['track']['href']);
     
@@ -588,12 +597,12 @@ function _spotifyfield_format_value($data) {
  * @param string $uri
  * @return function
  */
-function spotifyfield_get_album($data, $uri, $style) {
+function spotifyfield_get_album($data, $uri, $settings) {
   // Result is json, se lets get that into an array.
   $album = drupal_json_decode($data);
   // Add the spotify uri to the array, we need it later
   $album['uri'] = $uri;
-  $album['style'] = $style;
+  $album['settings'] = $settings;
   return theme('spotify_album', $album);
 }
 
@@ -618,10 +627,11 @@ function spotifyfield_get_track($data, $settings) {
  * @param string $uri
  * @return function
  */
-function spotifyfield_get_artist($data) {
+function spotifyfield_get_artist($data, $settings) {
   // Result is json, se lets get that into an array.
   $track = drupal_json_decode($data);
   // Add the spotify uri to the array, we need it later
+  $track['settings'] = $settings;
   return theme('spotify_artist', $track);
 }
 
@@ -631,7 +641,6 @@ function spotifyfield_get_remote_image_from_url($url) {
   $external_image_path = file_default_scheme() . '://external';
   // Get the defined image size.
   $url = preg_replace("/cover/", $imagesize, $url);
-
   // Format the image name
   $cut_url = str_ireplace("https://", "", $url);
   $cut_url = preg_replace("/^[^\/]*\//", "", $cut_url);
@@ -642,7 +651,6 @@ function spotifyfield_get_remote_image_from_url($url) {
 
   // Check if we allready have downloaded the image, return the image path if it
   // exists. Else download it.
-  var_dump($image_path);
   if (!file_destination($image_path, FILE_EXISTS_ERROR)) {
   // The file exists.
     return($image_path);
